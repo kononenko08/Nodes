@@ -12,7 +12,7 @@ sleep 1
 echo "-----------------------------------------------------------------------------"
 echo "Устанавливаем софт"
 echo "-----------------------------------------------------------------------------"
-curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/gear_peers.sh | bash &>/dev/null
+curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/ufw.sh | bash &>/dev/null
 curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/rust.sh | bash &>/dev/null
 sudo apt install --fix-broken -y &>/dev/null
 sudo apt install git mc clang curl jq htop net-tools libssl-dev llvm libudev-dev -y &>/dev/null
