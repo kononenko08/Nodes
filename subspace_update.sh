@@ -1,0 +1,121 @@
+#!/bin/bash
+
+echo "-----------------------------------------------------------------------------"
+curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/logo.sh | bash
+echo "-----------------------------------------------------------------------------"
+
+function get_vars {
+  export CHAIN="gemini-3c"
+  export RELEASE="gemini-3c-2023-mar-23"
+  export SUBSPACE_NODENAME=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-name" | awk -F\" '{print $4}')
+  export WALLET_ADDRESS=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-reward-address" | awk -F\" '{print $4}')
+  export PLOT_SIZE=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-plot-size" | awk -F\" '{print $4}')
+}
+
+function eof_docker_compose {
+  sudo tee <<EOF >/dev/null $HOME/subspace_docker/docker-compose.yml
+  version: "3.7"
+  services:
+    node:
+      image: ghcr.io/subspace/node:$RELEASE
+      volumes:
+        - node-data:/var/subspace:rw
+      ports:
+        - "0.0.0.0:32333:30333"
+        - "0.0.0.0:32433:30433"
+      restart: unless-stopped
+      command: [
+        "--chain", "$CHAIN",
+        "--base-path", "/var/subspace",
+        "--execution", "wasm",
+        "--blocks-pruning", "archive",
+        "--state-pruning", "archive",
+        "--port", "30333",
+        "--dsn-listen-on", "/ip4/0.0.0.0/tcp/30433",
+        "--rpc-cors", "all",
+        "--rpc-methods", "safe",
+        "--unsafe-ws-external",
+        "--dsn-disable-private-ips",
+        "--no-private-ipv4",
+        "--validator",
+        "--name", "$SUBSPACE_NODENAME",
+        "--telemetry-url", "wss://telemetry.subspace.network/submit 0",
+        "--out-peers", "100"
+      ]
+      healthcheck:
+        timeout: 5s
+        interval: 30s
+        retries: 5
+
+    farmer:
+      depends_on:
+        - node
+      image: ghcr.io/subspace/farmer:$RELEASE
+      volumes:
+        - farmer-data:/var/subspace:rw
+      ports:
+        - "0.0.0.0:32533:30533"
+      restart: unless-stopped
+      command: [
+        "--base-path", "/var/subspace",
+        "farm",
+        "--disable-private-ips",
+        "--node-rpc-url", "ws://node:9944",
+        "--listen-on", "/ip4/0.0.0.0/tcp/30533",
+        "--reward-address", "$WALLET_ADDRESS",
+        "--plot-size", "100G"
+      ]
+  volumes:
+    node-data:
+    farmer-data:
+EOF
+}
+
+function check_fork {
+  sleep 30
+  check_fork=`docker logs --tail 100  subspace_docker_node_1 2>&1 | grep "Node is running on non-canonical fork"`
+  if [ -z "$check_fork" ]
+  then
+    echo -e "${GREEN}Everything good${NORMAL}"
+  else
+    echo -e "${RED}Make a reload${NORMAL}"
+    cd $HOME/subspace_docker/
+    docker-compose down
+    docker volume rm subspace_docker_farmer-data subspace_docker_node-data subspace_docker_subspace-farmer subspace_docker_subspace-node
+    docker-compose up -d
+  fi
+}
+
+function check_verif {
+  sleep 30
+  check_verif=`docker logs --tail 100  subspace_docker_node_1 2>&1 | grep "Verification failed for block"`
+  if [ -z "$check_verif" ]
+  then
+    echo -e "${GREEN}Everything good${NORMAL}"
+  else
+    echo -e "${RED}Make a reload${NORMAL}"
+    cd $HOME/subspace_docker/
+    docker-compose down
+    docker volume rm subspace_docker_farmer-data subspace_docker_node-data subspace_docker_subspace-farmer subspace_docker_subspace-node
+    docker-compose up -d
+  fi
+}
+
+function update_subspace {
+  cd $HOME/subspace_docker/
+  docker-compose down
+  # docker volume rm subspace_docker_subspace-farmer subspace_docker_subspace-node
+  # docker volume rm subspace_docker_farmer-data subspace_docker_node-data
+  # docker volume rm subspace_docker_farmer-data
+  eof_docker_compose
+  docker-compose pull
+  docker-compose up -d
+}
+
+get_vars
+update_subspace
+check_fork
+# check_verif
+# line
+echo -e "${GREEN}=== Update finished ===${NORMAL}"
+cd $HOME
