@@ -5,8 +5,8 @@ curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/logo.sh | bash
 echo "-----------------------------------------------------------------------------"
 
 function get_vars {
-  export CHAIN="gemini-3c"
-  export RELEASE="gemini-3c-2023-mar-23"
+  export CHAIN="gemini-3d"
+  export RELEASE="gemini-3d-2023-apr-18"
   export SUBSPACE_NODENAME=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-name" | awk -F\" '{print $4}')
   export WALLET_ADDRESS=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-reward-address" | awk -F\" '{print $4}')
   export PLOT_SIZE=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-plot-size" | awk -F\" '{print $4}')
@@ -104,9 +104,6 @@ function check_verif {
 function update_subspace {
   cd $HOME/subspace_docker/
   docker-compose down
-  # docker volume rm subspace_docker_subspace-farmer subspace_docker_subspace-node
-  # docker volume rm subspace_docker_farmer-data subspace_docker_node-data
-  # docker volume rm subspace_docker_farmer-data
   eof_docker_compose
   docker-compose pull
   docker-compose up -d
@@ -117,5 +114,5 @@ update_subspace
 check_fork
 # check_verif
 # line
-echo -e "${GREEN}=== Update finished ===${NORMAL}"
+echo -e "${GREEN}    Update finished    ${NORMAL}"
 cd $HOME
