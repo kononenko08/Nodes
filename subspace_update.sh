@@ -6,7 +6,7 @@ echo "--------------------------------------------------------------------------
 
 function get_vars {
   export CHAIN="gemini-3d"
-  export RELEASE="gemini-3d-2023-apr-18"
+  export RELEASE="gemini-3d-2023-apr-24"
   export SUBSPACE_NODENAME=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-name" | awk -F\" '{print $4}')
   export WALLET_ADDRESS=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-reward-address" | awk -F\" '{print $4}')
   export PLOT_SIZE=$(cat $HOME/subspace_docker/docker-compose.yml | grep "\-\-plot-size" | awk -F\" '{print $4}')
@@ -71,36 +71,6 @@ function eof_docker_compose {
 EOF
 }
 
-function check_fork {
-  sleep 30
-  check_fork=`docker logs --tail 100  subspace_docker_node_1 2>&1 | grep "Node is running on non-canonical fork"`
-  if [ -z "$check_fork" ]
-  then
-    echo -e "${GREEN}Everything good${NORMAL}"
-  else
-    echo -e "${RED}Make a reload${NORMAL}"
-    cd $HOME/subspace_docker/
-    docker-compose down
-    docker volume rm subspace_docker_farmer-data subspace_docker_node-data subspace_docker_subspace-farmer subspace_docker_subspace-node
-    docker-compose up -d
-  fi
-}
-
-function check_verif {
-  sleep 30
-  check_verif=`docker logs --tail 100  subspace_docker_node_1 2>&1 | grep "Verification failed for block"`
-  if [ -z "$check_verif" ]
-  then
-    echo -e "${GREEN}Everything good${NORMAL}"
-  else
-    echo -e "${RED}Make a reload${NORMAL}"
-    cd $HOME/subspace_docker/
-    docker-compose down
-    docker volume rm subspace_docker_farmer-data subspace_docker_node-data subspace_docker_subspace-farmer subspace_docker_subspace-node
-    docker-compose up -d
-  fi
-}
-
 function update_subspace {
   cd $HOME/subspace_docker/
   docker-compose down
@@ -111,8 +81,7 @@ function update_subspace {
 
 get_vars
 update_subspace
-check_fork
 # check_verif
 # line
-echo -e "${GREEN}    Update finished    ${NORMAL}"
+echo -e "${GREEN}Update finished${NORMAL}"
 cd $HOME
