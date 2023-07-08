@@ -9,11 +9,11 @@ function install_tools {
 }
 
 function install_docker {
-  curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/docker.sh | bash
+  curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/docker.sh | bash
 }
 
 function install_ufw {
-  curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/ufw.sh | bash
+  curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/ufw.sh | bash
 }
 
 function read_nodename {
@@ -31,8 +31,8 @@ function read_wallet {
 }
 
 function get_vars {
-  export CHAIN="gemini-3c"
-  export RELEASE="gemini-3c-2023-mar-14"
+  export CHAIN="gemini-3e"
+  export RELEASE="gemini-3e-2023-jul-03"
 }
 
 function eof_docker_compose {
@@ -107,13 +107,13 @@ function delete_old {
 
 read_nodename
 read_wallet
-echo -e "Установка tools, ufw, docker"
+echo -e "Installing tools"
 install_tools
 install_ufw
 install_docker
 get_vars
 delete_old
-echo -e "Создаем docker-compose файл"
+echo -e "Making docker-compose file"
 eof_docker_compose
-echo -e "Запускаем Subspace"
+echo -e "Starting Subspace"
 docker_compose_up
