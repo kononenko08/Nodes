@@ -22,7 +22,7 @@ function env {
 }
 
 function install_docker {
-    bash <(curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/docker.sh)
+    bash <(curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/docker.sh)
 }
 
 function prepare_docker_image {
