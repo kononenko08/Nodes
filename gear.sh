@@ -12,8 +12,8 @@ sleep 1
 echo "-----------------------------------------------------------------------------"
 echo "Устанавливаем софт"
 echo "-----------------------------------------------------------------------------"
-curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/ufw.sh | bash &>/dev/null
-curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/rust.sh | bash &>/dev/null
+curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/ufw.sh | bash &>/dev/null
+curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/rust.sh | bash &>/dev/null
 sudo apt install --fix-broken -y &>/dev/null
 sudo apt install git mc clang curl jq htop net-tools libssl-dev llvm libudev-dev -y &>/dev/null
 source $HOME/.profile &>/dev/null
@@ -24,9 +24,9 @@ echo "софт установлен"
 echo "-----------------------------------------------------------------------------"
 
 
-wget https://get.gear.rs/gear-nightly-linux-x86_64.tar.xz &>/dev/null
-tar xvf gear-nightly-linux-x86_64.tar.xz &>/dev/null
-rm gear-nightly-linux-x86_64.tar.xz &>/dev/null
+wget https://get.gear.rs/gear-v0.3.1-x86_64-unknown-linux-gnu.tar.xz &>/dev/null
+tar xvf gear-v0.3.1-x86_64-unknown-linux-gnu.tar.xz &>/dev/null
+rm gear-v0.3.1-x86_64-unknown-linux-gnu.tar.xz &>/dev/null
 chmod +x $HOME/gear &>/dev/null
 echo "Билд завершен успешно"
 echo "-----------------------------------------------------------------------------"
@@ -49,7 +49,7 @@ ExecStart=$HOME/gear \
         --name $NODENAME_GEAR \
         --execution wasm \
 	--port 31333 \
-        --telemetry-url 'ws://telemetry-backend-shard.gear-tech.io:32001/submit 0' \
+        --telemetry-url 'ws://telemetry-backend-shard.gear-tech.io:32001/submit 0'	
 Restart=always
 RestartSec=10
 LimitNOFILE=10000
