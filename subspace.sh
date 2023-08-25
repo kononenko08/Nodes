@@ -4,116 +4,189 @@ echo "--------------------------------------------------------------------------
 curl -s https://raw.githubusercontent.com/kononenko08/Nodes/main/logo.sh | bash
 echo "-----------------------------------------------------------------------------"
 
-function install_tools {
-  sudo apt update && sudo apt install mc wget htop jq git -y
+# Цветовая палитра и переменные
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+DIR="$HOME/subspace-pulsar"
+PULSAR="$DIR/pulsar"
+SERVICE="$DIR/subspace-pulsar.service"
+
+# Функция для логирования
+log() {
+    local message="$1"
+    local log_file="$DIR/install.log"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" >> "$log_file"
 }
 
-function install_docker {
-  curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/docker.sh | bash
+# Функция для вывода и логирования сообщений
+echo_and_log() {
+    local message="$1"
+    local color="$2"
+    echo -e "${color}${message}${NC}"
+    log "${message}"
 }
 
-function install_ufw {
-  curl -s https://raw.githubusercontent.com/BananaAlliance/tools/main/ufw.sh | bash
+# Функция для проверки успешности выполнения команды
+check_success() {
+    if [ $? -eq 0 ]; then
+        echo_and_log "Успешно!" $GREEN
+    else
+        echo_and_log "Не удалось." $RED
+        exit 1
+    fi
 }
 
-function read_nodename {
-  if [ ! $SUBSPACE_NODENAME ]; then
-  echo -e "Введите ваше имя ноды(только буквы)"
-  read SUBSPACE_NODENAME
-  fi
+# Функция для извлечения и вывода адреса для наград
+show_reward_address() {
+    local file="$HOME/subspace_docker/docker-compose.yml"
+    local address=$(grep -oP '"--reward-address", "\K[^"]+' "$file")
+    local node_name=$(grep -oP '"--name", "\K[^"]+' "$file")
+
+    if [[ ! -z $address ]]; then
+        echo_and_log "Ваше название ноды: $node_name" $GREEN
+    else
+        echo_and_log "Название ноды не найдено, следуйте инструкциям в гайде." $RED
+    fi
+    
+    if [[ ! -z $address ]]; then
+        echo_and_log "Ваш адрес для наград: $address" $GREEN
+    else
+        echo_and_log "Адрес не найден, следуйте инструкциям в гайде." $RED
+    fi
 }
 
-function read_wallet {
-  if [ ! $WALLET_ADDRESS ]; then
-  echo -e "Введите ваш адрес из кошелька PolkadotJS"
-  read WALLET_ADDRESS
-  fi
+# Создание необходимых папок
+create_folders() {
+    echo_and_log "Создание необходимых папок..." $YELLOW
+    mkdir -p $DIR
+    check_success
 }
 
-function get_vars {
-  export CHAIN="gemini-3e"
-  export RELEASE="gemini-3e-2023-jul-03"
+# Скачивание файла
+download_file() {
+    echo_and_log "Скачивание файла..." $YELLOW
+    wget -q -O $PULSAR "https://github.com/subspace/pulsar/releases/download/v0.6.2-alpha/pulsar-ubuntu-x86_64-skylake-v0.6.2-alpha"
+    check_success
+    sleep 1
 }
 
-function eof_docker_compose {
-  mkdir -p $HOME/subspace_docker/
-  sudo tee <<EOF >/dev/null $HOME/subspace_docker/docker-compose.yml
-  version: "3.7"
-  services:
-    node:
-      image: ghcr.io/subspace/node:$RELEASE
-      volumes:
-        - node-data:/var/subspace:rw
-      ports:
-        - "0.0.0.0:32333:30333"
-        - "0.0.0.0:32433:30433"
-      restart: unless-stopped
-      command: [
-        "--chain", "$CHAIN",
-        "--base-path", "/var/subspace",
-        "--execution", "wasm",
-        "--blocks-pruning", "archive",
-        "--state-pruning", "archive",
-        "--port", "30333",
-        "--dsn-listen-on", "/ip4/0.0.0.0/tcp/30433",
-        "--rpc-cors", "all",
-        "--rpc-methods", "safe",
-        "--unsafe-ws-external",
-        "--dsn-disable-private-ips",
-        "--no-private-ipv4",
-        "--validator",
-        "--name", "$SUBSPACE_NODENAME",
-        "--telemetry-url", "wss://telemetry.subspace.network/submit 0",
-        "--out-peers", "100"
-      ]
-      healthcheck:
-        timeout: 5s
-        interval: 30s
-        retries: 5
+# Инициализация ноды
+init_node() {
+    echo_and_log "Инициализация ноды..." $YELLOW
+    chmod +x $PULSAR
+    $PULSAR init
+    check_success
+    sleep 1
+}
 
-    farmer:
-      depends_on:
-        - node
-      image: ghcr.io/subspace/farmer:$RELEASE
-      volumes:
-        - farmer-data:/var/subspace:rw
-      ports:
-        - "0.0.0.0:32533:30533"
-      restart: unless-stopped
-      command: [
-        "--base-path", "/var/subspace",
-        "farm",
-        "--disable-private-ips",
-        "--node-rpc-url", "ws://node:9944",
-        "--listen-on", "/ip4/0.0.0.0/tcp/30533",
-        "--reward-address", "$WALLET_ADDRESS",
-        "--plot-size", "100G"
-      ]
-  volumes:
-    node-data:
-    farmer-data:
+# Создание сервисного файла
+create_service_file() {
+    echo_and_log "Создание сервисного файла..." $YELLOW
+    cat <<EOF > $SERVICE
+[Unit]
+Description=Subspace Pulsar Node
+After=network.target
+
+[Service]
+ExecStart=$PULSAR farm
+WorkingDirectory=$DIR
+User=$USER
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
 EOF
+    check_success
+    sleep 1
 }
 
-function docker_compose_up {
-  docker-compose -f $HOME/subspace_docker/docker-compose.yml up -d
+# Запуск сервиса ноды
+start_service() {
+    echo_and_log "Запуск сервиса ноды..." $YELLOW
+    sudo ln -s $SERVICE /etc/systemd/system/subspace-pulsar.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable subspace-pulsar
+    sudo systemctl start subspace-pulsar
+    check_success
+    sleep 1
 }
 
-function delete_old {
-  docker-compose -f $HOME/subspace_docker/docker-compose.yml down -v &>/dev/null
-  docker volume rm subspace_docker_subspace-farmer subspace_docker_subspace-node &>/dev/null
+# Проверка статуса сервиса
+check_service_status() {
+    echo_and_log "Проверка статуса сервиса..." $YELLOW
+    systemctl is-active --quiet subspace-pulsar
+    check_success
+    sleep 1
+}
+
+# Проверка наличия уже существующих файлов перед установкой
+pre_install_check() {
+    if [ -d $DIR ]; then
+        echo_and_log "Кажется, Subspace Pulsar уже установлен. Вы уверены, что хотите продолжить? Это может перезаписать существующие файлы." $YELLOW
+        read -p "Продолжить установку? (y/n): " choice
+        if [[ $choice != "y" ]]; then
+            echo_and_log "Установка отменена." $RED
+            sleep 1
+            exit 1
+        fi
+    fi
+}
+
+# Удаление установленной ноды
+uninstall_node() {
+    echo_and_log "Проверка наличия установленной ноды..." $YELLOW
+    if [ -d $DIR ]; then
+        echo_and_log "Нода Subspace установлена. Вы действительно хотите удалить ее?" $YELLOW
+        read -p "Удалить ноду? (y/n): " choice
+        if [[ $choice == "y" ]]; then
+            echo_and_log "Остановка и удаление сервиса..." $YELLOW
+            sudo systemctl stop subspace-pulsar
+            sudo systemctl disable subspace-pulsar
+            sudo rm -f /etc/systemd/system/subspace-pulsar.service
+            sudo systemctl daemon-reload
+
+            echo_and_log "Выполнение команды pulsar wipe..." $YELLOW
+            $DIR/pulsar wipe
+            check_success
+
+            echo_and_log "Удаление файлов..." $YELLOW
+            sleep 1
+            rm -rf $DIR
+            check_success
+            sleep 1
+        else
+            echo_and_log "Удаление отменено пользователем." $GREEN
+        fi
+    else
+        echo_and_log "Нода Subspace не обнаружена." $GREEN
+    fi
 }
 
 
-read_nodename
-read_wallet
-echo -e "Installing tools"
-install_tools
-install_ufw
-install_docker
-get_vars
-delete_old
-echo -e "Making docker-compose file"
-eof_docker_compose
-echo -e "Starting Subspace"
-docker_compose_up
+# Запуск установки ноды
+install_node() {
+    pre_install_check
+    create_folders
+    download_file
+    show_reward_address
+    init_node
+    create_service_file
+    start_service
+    check_service_status
+}
+
+# Определение действия: установка или удаление
+case $1 in
+    install)
+        install_node
+        ;;
+    uninstall)
+        uninstall_node
+        ;;
+    *)
+        echo_and_log "Неверный аргумент. Используйте 'install' для установки или 'uninstall' для удаления." $RED
+        ;;
+esac
