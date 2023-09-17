@@ -13,11 +13,13 @@ NC='\033[0m' # No Color
 DIR="$HOME/subspace-pulsar"
 PULSAR="$DIR/pulsar"
 SERVICE="$DIR/subspace-pulsar.service"
-CONFIG_URL="https://github.com/BananaAlliance/guides/raw/main/subspace/config.sh"
+CONFIG_URL="https://raw.githubusercontent.com/kononenko08/Nodes/main/config_subspace.sh"
 
-# Скачивание файла конфигурации
-wget -q -O $DIR/config.sh $CONFIG_URL
-source $DIR/config.sh
+# Установим интервал обновления в 2 секунды
+interval=7
+
+# Предыдущий текущий блок (для расчета скорости)
+previous_block=0
 
 # Функция для логирования
 log() {
@@ -67,15 +69,18 @@ show_reward_address() {
 create_folders() {
     echo_and_log "Создание необходимых папок..." $YELLOW
     mkdir -p $DIR
+    # Скачивание файла конфигурации
+    wget -q -O $DIR/config.sh $CONFIG_URL
+    source $DIR/config.sh
     check_success
 }
 
 # Скачивание файла
 download_file() {
     echo_and_log "Скачивание файла..." $YELLOW
+    wget -q -O $PULSAR $PULSAR_URL
     sleep 1
     echo_and_log "Актуальная версия: $CURRENT_VERSION" $GREEN
-    wget -q -O $PULSAR $PULSAR_URL
     check_success
     sleep 1
 }
@@ -172,8 +177,60 @@ uninstall_node() {
     fi
 }
 
+check_sync() {
+    while true; do
+        clear
+
+        latest_log_file=$(ls -t $HOME/.local/share/pulsar/logs | head -n 1)
+        last_line=$(tail -n 1 $HOME/.local/share/pulsar/logs/$latest_log_file)
+
+        if [[ $last_line == *"Syncing"* ]]; then
+            current_block=$(echo $last_line | grep -o -E 'best: #([0-9]+)' | cut -d'#' -f2)
+            target_block=$(echo $last_line | grep -o -E 'target=#([0-9]+)' | cut -d'#' -f2)
+            difference=$((target_block - current_block))
+
+            speed=$((current_block - previous_block))
+            if [ $speed -ne 0 ]; then
+                time_left_seconds=$(($difference / $speed * $interval))
+                time_left_hours=$(($time_left_seconds / 3600))
+                time_left_minutes=$(($time_left_seconds % 3600 / 60))
+                echo "Оставшееся время: примерно $time_left_hours часов $time_left_minutes минут"
+            else
+                echo "Синхронизация не продвигается"
+            fi
+
+            progress=$((100 * $current_block / $target_block))
+            bar_length=50
+            progress_bar_length=$(($progress * $bar_length / 100))
+            progress_bar=$(printf "%-${progress_bar_length}s" "=")
+            spaces=$(printf "%-$(($bar_length - $progress_bar_length))s" " ")
+            echo -e "Прогресс: [${progress_bar// /█}${spaces}] $progress%"
+
+            echo "Текущий блок: $current_block"
+            echo "Финальный блок: $target_block"
+            echo "Оставшиеся блоки для синхронизации: $difference"
+
+            previous_block=$current_block
+        else
+            # Мониторим плоттинг
+            plotting_info=$(cat $HOME/.local/share/pulsar/logs/$latest_log_file | grep "plotted" | tail -n 1)
+            plotting_percentage=$(echo $plotting_info | grep -o -E 'Sector plotted successfully \(([0-9.]+)%\)')
+            if [[ ! -z "$plotting_percentage" ]]; then
+                echo "Процесс плоттинга: $plotting_percentage"
+            else
+                echo "Не удалось определить состояние синхронизации. Ждем обновления..."
+            fi
+        fi
+
+        sleep $interval
+    done
+}
+
+
 # Обновление ноды
 update_node() {
+    wget -q -O $DIR/config.sh $CONFIG_URL
+    source $DIR/config.sh
     echo_and_log "Проверка версии..." $YELLOW
     INSTALLED_VERSION=$($PULSAR --version | awk '{print $2}')
     echo_and_log "Текущая версия: $INSTALLED_VERSION" $GREEN
@@ -189,14 +246,76 @@ update_node() {
     download_file
     chmod +x $PULSAR
     check_success
-    echo_and_log "Очистка данных фармера..." $YELLOW
-    echo -e "y\nn\nn\nn" | $PULSAR wipe
-    check_success
     echo_and_log "Перезапуск сервиса..." $YELLOW
     sudo systemctl restart subspace-pulsar
     check_success
 }
 
+
+logs() {
+    latest_log_file=$(ls -t $HOME/.local/share/pulsar/logs | head -n 1)
+
+    # Выводим оповещение
+    echo -e "${YELLOW}Сейчас откроются логи, вы можете их закрыть комбинацией CTRL+C. Нажмите ENTER или любую клавишу, чтобы продолжить.${NC}"
+
+    # Ожидаем нажатия пользователем клавиши
+    read -n 1 -s
+
+    tail -f $HOME/.local/share/pulsar/logs/$latest_log_file
+}
+
+print_node_info() {
+    # Извлекаем значения из settings.toml
+    node_name=$(grep "name = " $HOME/.config/pulsar/settings.toml | cut -d'"' -f2)
+    farm_size=$(grep "farm_size = " $HOME/.config/pulsar/settings.toml | cut -d'"' -f2)
+    reward_address=$(grep "reward_address = " $HOME/.config/pulsar/settings.toml | cut -d'"' -f2)
+
+    # Извлекаем информацию из вывода команды
+    farmer_status=$($HOME/subspace-pulsar/pulsar info | grep -q "A farmer instance is active!" && echo "Нода фермера активна" || echo "Нода фермера не активна")
+    pledged_size=$($HOME/subspace-pulsar/pulsar info | grep "You have pledged to the network:" | awk '{print $7}')
+    farmed_blocks=$($HOME/subspace-pulsar/pulsar info | grep "Farmed" | awk '{print $2}')
+    voted_blocks=$($HOME/subspace-pulsar/pulsar info | grep "Voted" | awk '{print $3}')
+    earned_coins=$(echo "scale=1; $($HOME/subspace-pulsar/pulsar info | grep "SSC(s) earned!" | awk '{print $1}') / 1000000000000000000" | bc | sed 's/^\./0./')
+    plotting_status=$($HOME/subspace-pulsar/pulsar info | grep -q "Initial plotting is finished!" && echo "Плоттинг завершен" || echo "Плоттинг не завершен")
+
+    # Выводим значения в красивом формате
+    echo "======================================="
+    echo "   Название узла: $node_name"
+    echo "   Размер плота: ${pledged_size}GB"
+    echo "   Нафармлено блоков: $farmed_blocks"
+    echo "   Проголосовано блоков: $voted_blocks"
+    echo "   Заработано монет: $earned_coins"
+    echo "   Статус узла: $farmer_status"
+    echo "   Статус плоттинга: $plotting_status"
+    echo "   Публичный ключ $reward_address"
+    echo "======================================="
+}
+
+
+update_farm_size() {
+    sudo systemctl stop subspace-pulsar.service
+    current_size=$($HOME/subspace-pulsar/pulsar info | grep "You have pledged to the network:" | awk '{print $7}')
+    echo "Текущий размер плота: $current_size"
+    #sudo rm $HOME/.local/share/pulsar/farms/plot.bin
+    echo_and_log "Очистка данных фармера..." $YELLOW
+    echo -e "y\nn\nn\nn" | $PULSAR wipe
+    while true; do
+        # Запрос на ввод размера плота
+        read -p "Введите размер плота в GB (только цифры): " user_input
+
+        # Проверка на то, что введенная строка содержит только цифры
+        if [[ $user_input =~ ^[0-9]+$ ]] && [ "$user_input" -gt 0 ]; then
+            # Замена размера плота в файле settings.toml
+            sed -i "s/farm_size = \".* GB\"/farm_size = \"$user_input.0 GB\"/g" $HOME/.config/pulsar/settings.toml
+            
+            echo "Размер плота был обновлен на $user_input.0 GB"
+            break
+        else
+            echo "Ошибка: введите правильный размер плота!"
+        fi
+    done
+    sudo systemctl restart subspace-pulsar.service
+}
 
 
 # Запуск установки ноды
@@ -213,6 +332,18 @@ install_node() {
 
 # Определение действия: установка или удаление
 case $1 in
+    change_plot)
+        update_farm_size
+        ;;
+    show_info)
+        print_node_info
+        ;;
+    logs)
+        logs
+        ;;
+    check_sync)
+        check_sync
+        ;;
     install)
         install_node
         ;;
@@ -223,6 +354,6 @@ case $1 in
         update_node
         ;;
     *)
-        echo_and_log "Неверный аргумент. Используйте 'install' для установки или 'uninstall' для удаления." $RED
+        echo_and_log "Неверный аргумент. Используйте 'install' для установки или 'uninstall' для удаления, 'update' для обновления, 'check_sync' для проверки статуса синхронизации" $RED
         ;;
 esac
