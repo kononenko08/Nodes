@@ -8,6 +8,7 @@ echo "--------------------------------------------------------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
+BLUE="\033[0;34m"
 NC='\033[0m' # No Color
 
 DIR="$HOME/subspace-pulsar"
@@ -20,6 +21,19 @@ interval=7
 
 # Предыдущий текущий блок (для расчета скорости)
 previous_block=0
+
+usage() {
+    echo -e "${BLUE}Использование: $0 [install|update [-w [all|farmer|node]]|uninstall|show_info|change_plot]${NC}"
+    echo -e "    ${GREEN}install${NC}      Установка ноды."
+    echo -e "    ${GREEN}update${NC}       Запуск обновления ноды (-w аргумент для wipe - all|farmer|node)"
+    echo -e "    ${RED}uninstall${NC}    Удаление ноды"
+    echo -e "    ${YELLOW}show_info${NC}    Показать информацию о установленной ноде"
+    echo -e "    ${YELLOW}change_plot${NC}  Изменить размер плота"
+    echo -e "    ${YELLOW}logs${NC}         Открыть логи"
+    echo -e "    ${YELLOW}check_sync${NC}   Проверить статус синхронизации"
+    echo -e "    ${YELLOW}help${NC}         Открыть эту справку"
+    exit 1
+}
 
 # Функция для логирования
 log() {
@@ -218,7 +232,7 @@ check_sync() {
             if [[ ! -z "$plotting_percentage" ]]; then
                 echo "Процесс плоттинга: $plotting_percentage"
             else
-                echo "Не удалось определить состояние синхронизации. Ждем обновления..."
+                echo "Не удалось определить состояние синхронизации. Возможно, синхронизация уже завершилась. Ждем обновления..."
             fi
         fi
 
@@ -330,6 +344,8 @@ install_node() {
     check_service_status
 }
 
+
+
 # Определение действия: установка или удаление
 case $1 in
     change_plot)
@@ -350,10 +366,23 @@ case $1 in
     uninstall)
         uninstall_node
         ;;
+    help)
+        usage
+        ;;
     update)
         update_node
+
+        echo "После обновления..." # Добавим это отладочное сообщение
+        
+        if [[ $2 == "-w" ]]; then
+            if [[ -z $3 ]]; then
+                echo "Аргумент -w требует значение (all, farmer или node)."
+                exit 1
+            fi
+            wipe_choice $3
+        fi
         ;;
     *)
-        echo_and_log "Неверный аргумент. Используйте 'install' для установки или 'uninstall' для удаления, 'update' для обновления, 'check_sync' для проверки статуса синхронизации" $RED
+        usage
         ;;
 esac
